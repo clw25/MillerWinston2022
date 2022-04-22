@@ -1,0 +1,246 @@
+#!/usr/bin/env/ python 
+
+configfile: "config.yaml"
+
+SAMPLES = config["samples"]
+
+wildcard_constraints:
+    species="[a-zA-Z0-9-]+",
+    normmethod="[a-zA-Z0-9-]+"
+
+
+rule all:
+    input:
+        "barcodes.tsv",
+        #demultiplex and combine
+        expand("fastq/{sample}.fastq.gz", sample=SAMPLES),
+        #cutadapt
+        expand("fastq/trimmed/{sample}.trimmed.fastq.gz", sample=SAMPLES),
+        #alignement
+        expand("fastq/aligned/{sample}.aligned.fastq.gz", sample=SAMPLES),
+        expand("fastq/aligned/{sample}.unaligned.fastq.gz", sample=SAMPLES),
+        expand("fastq/aligned/{sample}.bam", sample=SAMPLES),
+        "fastq/aligned/alignment_summary.txt",
+        #index
+        expand("fastq/aligned/{sample}.bam.bai", sample=SAMPLES),
+        #species
+        expand("fastq/aligned/{sample}_{species}.bam", sample=SAMPLES, species = ["Scer", "Spom"]),
+        expand("fastq/aligned/{sample}_{species}.bam.bai", sample=SAMPLES, species = ["Scer", "Spom"]),
+        "fastq/aligned/alignment_summary_byspecies.txt",
+#        "fastq/aligned/alignment_normfactors.txt",
+        #bigwig
+        expand("DataToPlot/bigwig/{sample}_{normmethod}.bw", sample=SAMPLES, normmethod = ["libsize", "spikein"]),
+        expand("DataToPlot/bigwig/{sample}_libsizeNODUP.bw", sample=SAMPLES),
+        expand("DataToPlot/bigwig/{sample}_spikeinNODUP.bw", sample=SAMPLES),
+        expand("DataToPlot/bigwig/{sample}_{normmethod}NODUP.bw", sample=SAMPLES, normmethod = ["libsize", "spikein"])
+# demultiplex, allow one mismatch to barcode, remove barcodes and 'A' tail
+
+#rule makeBarcodeFile:
+#    output:
+#        'barcodes.tsv'
+#    params:
+#        barcodes = config['samples']    
+#    run:
+#        with open(output[0], "w") as out:
+#            for i in params.barcodes:
+#                out.write('\t'.join((i,params.barcodes[i]["barcode"])) + '\n')
+rule makeBarcodeFile:
+    output:
+        'barcodes.tsv'
+    run:
+        with open(output[0], "w") as out:
+            for samples,value in SAMPLES.items():
+                out.write(f'{sample}\t{value["barcode"]}T\n')
+
+rule demultiplex:
+    input:
+        fastq = config["fastq"],
+        barcodes = "barcodes.tsv"
+    output:
+        expand("fastq/{sample}.fastq.gz", sample=["unmatched"] + list(SAMPLES)),
+    log:
+        "logs/demultiplex.log"
+    shell: """
+       (fastq-multx -B {input.barcodes} -b -m 1 {input.fastq} -o fastq/%.fastq.gz) &> {log}
+        """
+
+#cudadapt -- trim low quality reads from 3' end
+#note: if did not remove T base from barcodes in fastqmultx, add -u 1 to force removal of 5'base
+rule cutadapt:
+    input:
+        "fastq/{sample}.fastq.gz"
+    output:
+        "fastq/trimmed/{sample}.trimmed.fastq.gz"
+    params:
+        quality_cutoff = config["cutadapt"]["quality_cutoff"],
+        min_length = config["cutadapt"]["min_length"],
+        adapter = lambda wc:SAMPLES[wc.sample]["barcode"]
+    log:
+        "logs/cutadapt.{sample}.log"
+    shell:"""
+    (cutadapt --adapter={params.adapter} --nextseq-trim={params.quality_cutoff} -m {params.min_length} --trim-n --error-rate=0.05 -o {output} {input}) &> {log}"""
+
+#alignment with bowtie requires a genome and index build. if not present, see bowtie documentation to build
+
+rule alignement:
+    input: 
+        fastq = "fastq/trimmed/{sample}.trimmed.fastq.gz",
+    output:
+        aligned = "fastq/aligned/{sample}.aligned.fastq.gz",
+        unaligned = "fastq/aligned/{sample}.unaligned.fastq.gz",
+        sam = temp("fastq/aligned/{sample}.sam")
+    params:
+        thread = config["threads"],
+        genome = config["indexdir"] + config["indexprefix"]
+    log:
+        "logs/alignment.{sample}.log"
+    shell:"""
+        (bowtie2 -p {params.thread} -x {params.genome} -U {input.fastq} --al-gz {output.aligned} --un-gz {output.unaligned} -S {output.sam}) &> {log}""" 
+
+rule samtobam:
+    input:
+        "fastq/aligned/{sample}.sam"
+    output:
+        bam = "fastq/aligned/{sample}.bam"
+    params:
+        thread = config["threads"]
+    log:
+        "logs/samtobam.{sample}.log"
+    shell:"""
+        (samtools view -buh -q 3 {input} | samtools sort -T {wildcards.sample} -@ {params.thread} -o {output.bam} -) &> {log}"""
+
+rule alignment_summary:
+    input:
+        expand("fastq/aligned/{sample}.bam", sample=SAMPLES)
+    output:
+        "fastq/aligned/alignment_summary.txt"
+    log:
+        "logs/alignmentsummary.log"
+    script: 
+        "scripts/extract_bowtie_log.R"
+
+rule index_bam:
+    input:
+        "fastq/aligned/{sample}.bam"
+    output:
+        "fastq/aligned/{sample}.bam.bai"
+    log:
+        "logs/index_bam.{sample}.log"
+    shell:"""
+        (samtools index {input}) &> {log}"""
+
+rule species_separate:
+    input:
+        bam = "fastq/aligned/{sample}.bam",
+        bai =  "fastq/aligned/{sample}.bam.bai"
+    output:
+        bam = "fastq/aligned/{sample}_{species}.bam"
+    params:
+        config["indexdir"] + "combined_genome.chrom.sizes"
+    log:
+        "logs/species_separate.{sample}.{species}.log"
+    shell:"""
+        (samtools view -bh {input} $(grep {wildcards.species} {params} | awk 'BEGIN{{FS="\\t"; ORS=" "}}{{print $1}}') > {output.bam}) &> {log}"""
+
+rule read_counts:
+    input:
+        expand("fastq/aligned/{sample}_{species}.bam", sample=SAMPLES, species = ["Scer", "Spom"])
+    output:
+        summary = "fastq/aligned/alignment_summary_byspecies.txt"
+       # withheadings = temp("fastq/aligned/alignment_summary_byspecies_TEMP.txt")
+    log:
+        "logs/read_count.log"
+    shell:"""
+        for i in {input}; do echo "$i $(samtools view -c $i )" >> {output.summary}; done """
+
+#problem with running R script on the cluster. works locally - download alignemnt by species, run locally, then reupload
+#rule norm_factor_calc:
+#    input:
+#        "fastq/aligned/alignment_summary_byspecies.txt"
+#    output:
+#        "fastq/aligned/alignment_normfactors.txt"
+#    log:
+#        "logs/norm_factor_calc.log"
+#    script:
+#        "scripts/norm_factor_calcChIP.R"
+
+
+#rule reheader_species:
+#    input:
+#        "fastq/aligned/{sample}_{species}.bam"
+#    output:
+#        "fastq/aligned/{sample}_{species}_{rehead}.bam"
+#    log:
+#        "logs/reheader_species.{sample}.{species}.log"
+#    shell:"""
+#        (samtools view -H {input} | grep {wildcards.species} | sed 's/{wildcards.species}_//' | samtools reheader - {input} > {output}) &> {log}"""
+
+
+rule norm_bigwigs_SI:
+    input:
+        bam = "fastq/aligned/{sample}_Scer.bam",
+        normfactors = "fastq/aligned/alignment_normfactors.txt"
+    output:
+        "DataToPlot/bigwig/{sample}_spikein.bw"
+    params:
+        config["fraglength"]
+    log:
+        "logs/norm_bigwigs.{sample}_spikein.log"
+    run:
+        if config["spikein"] == True:
+            shell("""
+                (bamCoverage -b {input.bam} -o {output} --scaleFactor $(grep "{input.bam}" {input.normfactors} | awk '{{print $2}}') -bs 20 --extendReads {params} --smoothLength 60) &> {log}""")
+
+
+rule norm_bigwigs_SINODUP:
+    input:
+        bam = "fastq/aligned/{sample}_Scer.bam",
+        normfactors = "fastq/aligned/alignment_normfactors.txt"
+    output:
+        "DataToPlot/bigwig/{sample}_spikeinNODUP.bw"
+    params:
+        config["fraglength"]
+    log:
+        "logs/norm_bigwigs.{sample}_spikein.log"
+    run:
+        if config["spikein"] == True:
+            shell("""
+                (bamCoverage -b {input.bam} -o {output} --scaleFactor $(grep "{input.bam}" {input.normfactors} | awk '{{print $2}}') -bs 20 --extendReads {params} --smoothLength 60 --ignoreDuplicates) &> {log}""")
+
+
+rule norm_bigwigs_libsize:
+    input:
+        bam = "fastq/aligned/{sample}_Scer.bam",
+        normfactors = "fastq/aligned/alignment_normfactors.txt"
+    output:
+        "DataToPlot/bigwig/{sample}_libsize.bw"
+    params:
+        config["fraglength"] 
+    log:
+        "logs/norm_bigwigs.{sample}_libsize.log"
+    shell:"""
+        (bamCoverage -b {input.bam} -o {output} --scaleFactor $(grep "{input.bam}" {input.normfactors} | awk '{{print $3}}') -bs 20 --extendReads {params} --smoothLength 60) &> {log}"""
+
+rule norm_bigwigs_NODUPlibsize:
+    input:
+        bam = "fastq/aligned/{sample}_Scer.bam",
+        normfactors = "fastq/aligned/alignment_normfactors.txt"
+    output:
+        "DataToPlot/bigwig/{sample}_libsizeNODUP.bw"
+    params:
+        config["fraglength"]
+    log:
+        "logs/norm_bigwigs.{sample}_nodup_libsize.log"
+    shell:"""
+        (bamCoverage -b {input.bam} -o {output} --scaleFactor $(grep "{input.bam}" {input.normfactors} | awk '{{print $3}}') -bs 20 --extendReads {params} --smoothLength 60 --ignoreDuplicates) &> {log}"""
+
+#rule IPoverINPUTratio:
+#    input: 
+#        bw_IP = lambda wc: "DataToPlot/bigwig/{sample}_spikeinNODUP.bw" if wc.sample in IPS else [],
+#        bw_inputsample = lambda wc: "DataToPlot/bigwig/{sample}_spikeinNODUP.bw".format(sample=SAMPLES[wc.sample]["inputsample"]) if wc.sample in IPS else [] 
+#    output:
+#        "DataToPlot/bigwig/{sample}_{normmethod}_IPinputRATIO.bw"
+#    log:
+#        "logs/IPoverINPUTratio.{sample}.{normmethod}.log"
+#    shell:"""
+#        (bigwigCompare --bigwig1 {input.bw_IP} --bigwig2 {input.bw_inputsample} --operation ratio --skipNAs -o {output}) &> {log}"""  

@@ -1,0 +1,182 @@
+##update (1) fastq file with raw data (2) samples + corresponding barcode information
+
+#raw data in fastq format
+fastq: /n/groups/winston/clw20/12_BrdUIPseq/fastq/BrdU-IP-seq/pooled_BrdU_libs_S1_R1_001.fastq.gz 
+
+#genome information
+#for bowtie2, heading of index files for alignement
+indexdir: /n/groups/winston/clw20/0_ref/snakemakeDRIP/
+indexprefix: ScSpcombined
+
+#directory with annotation files
+annotationDIR: /n/groups/winston/clw20/0_ref/snakemakeDRIP/annotations/
+
+#average library fragment length as determined by library prep QC (such as BioA)
+fraglength: 375
+
+#was a spike-in used in the experiment? True or False. note spike-in = Spom
+spikein: True
+
+#list of samples
+#samples should follow this format: genotype-replicate-condition-IP/input; where condition is 30 min or HU treatment 
+samples:
+    SPT6-1-30-IP: 
+        barcode: CCATACAC
+        type: IP
+        inputsample: SPT6-1-30-input 
+    SPT6-2-30-IP:
+        barcode: GTCTACAT
+        type: IP
+        inputsample: SPT6-2-30-input 
+    SPT6-2-HU-IP:
+        barcode: GAGTTAAC
+        type: IP
+        inputsample: SPT6-2-HU-input 
+    SPT6-3-30-IP:
+        barcode: ATCCTATTC
+        type: IP
+        inputsample: SPT6-3-30-input 
+    SPT6-3-HU-IP:
+        barcode: CGGACGTGG
+        type: IP
+        inputsample: SPT6-3-HU-input 
+    spt6YW-1-30-IP:
+        barcode: GCAGCCTC 
+        type: IP
+        inputsample: spt6YW-1-30-input 
+    spt6YW-1-HU-IP:
+        barcode: TCGCGTAC
+        type: IP
+        inputsample: spt6YW-1-HU-input
+    spt6YW-2-30-IP:
+        barcode: TATACCGT
+        type: IP
+        inputsample: spt6YW-2-30-input
+    spt6YW-2-HU-IP:
+        barcode: TGCGGTTA
+        type: IP
+        inputsample: spt6YW-2-HU-input
+    spt6YW-3-30-IP:
+        barcode: GCGTTTCGA
+        type: IP
+        inputsample: spt6YW-3-30-input
+    spt6YW-3-HU-IP:
+        barcode: TATCTCCG
+        type: IP
+        inputsample: spt6YW-3-HU-input
+    spt650-1-30-IP:
+        barcode: AACACCTAC
+        type: IP
+        inputsample: spt650-1-30-input
+    spt650-1-HU-IP:
+        barcode: CCTTTACAG
+        type: IP
+        inputsample: spt650-1-HU-input
+    spt650-2-30-IP:
+        barcode: GGTCCTTGA 
+        type: IP
+        inputsample: spt650-2-30-input
+    spt650-2-HU-IP:
+        barcode: TTGAGTGT
+        type: IP
+        inputsample: spt650-2-HU-input
+    spt650-4-30-IP:
+        barcode: ACAGTGCAC 
+        type: IP
+        inputsample: spt650-4-30-input
+    spt650-4-HU-IP:
+        barcode: CACAGTTGG 
+        type: IP
+        inputsample: spt650-4-HU-input
+    DMSO-1-30-IP:
+        barcode: ATCACG 
+        type: IP
+        inputsample: DMSO-1-30-input
+    IAA-1-30-IP:
+        barcode: CGATGT 
+        type: IP
+        inputsample: IAA-1-30-input
+    DMSO-1-HU-IP:
+        barcode: TTAGGC 
+        type: IP
+        inputsample: DMSO-1-HU-input
+    IAA-1-HU-IP:
+        barcode: TGACCA 
+        type: IP
+        inputsample: IAA-1-HU-input
+    DMSO-4-30-IP:
+        barcode: GATCAG 
+        type: IP
+        inputsample: DMSO-4-30-input
+    IAA-4-30-IP: 
+        barcode: TAGCTT 
+        type: IP
+        inputsample: IAA-4-30-input
+    DMSO-4-HU-IP: 
+        barcode: GGCTAC 
+        type: IP
+        inputsample: DMSO-4-HU-input
+    IAA-4-HU-IP: 
+        barcode: CTTGTA 
+        type: IP
+        inputsample: IAA-4-HU-input
+
+
+    SPT6-1-30-input: 
+          barcode: ACTAACTGC
+    SPT6-2-30-input: 
+          barcode: GTTGTCCCA
+    SPT6-2-HU-input: 
+          barcode: TGACGCAT
+    SPT6-3-30-input: 
+          barcode: GGCAGACGA
+    SPT6-3-HU-input: 
+          barcode: TTCTGATG
+    spt6YW-1-30-input: 
+          barcode: ATCGCCAGC
+    spt6YW-1-HU-input: 
+          barcode: CATTCCAAG
+    spt6YW-2-30-input: 
+          barcode: GCAAGTAGA
+    spt6YW-2-HU-input: 
+          barcode: TGATCCGA
+    spt6YW-3-30-input: 
+          barcode: AGTAGTGGC
+    spt6YW-3-HU-input: 
+          barcode: CTAGTCATG
+    spt650-1-30-input: 
+          barcode: ACGTAGCTC
+    spt650-1-HU-input: 
+          barcode: CGAACTGTG
+    spt650-2-30-input: 
+          barcode: TAGCTAGTA
+    spt650-2-HU-input: 
+          barcode: GTGGGATA
+    spt650-4-30-input: 
+          barcode: GACACTCTA
+    spt650-4-HU-input: 
+          barcode: TCATTAGG
+    DMSO-1-30-input:  
+          barcode: ACAGTG
+    IAA-1-30-input:  
+          barcode: GCCAAT
+    DMSO-1-HU-input:  
+          barcode: CAGATC
+    IAA-1-HU-input:  
+          barcode: ACTTGA
+    DMSO-4-30-input:  
+          barcode: ATATAGGA
+    IAA-4-30-input:  
+          barcode: AACCGTGT
+    DMSO-4-HU-input:  
+          barcode: AGGTCAGT
+    IAA-4-HU-input:  
+          barcode: CTCTGTCT 
+
+
+#paramters for various rules
+threads: 4
+
+cutadapt:
+    quality_cutoff: 20
+    min_length: 5

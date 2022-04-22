@@ -1,0 +1,10 @@
+.snakemake
+.bw
+.fastq.gz
+.bed
+.mat
+.tab
+.sam
+.bam
+.txt
+.png

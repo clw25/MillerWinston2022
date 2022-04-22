@@ -1,0 +1,30 @@
+
+__default__ :
+    queue : "short"
+    time : 120
+    n : 1
+    mem : 2000
+    name : "{rule}.{wildcards}"
+    log : "logs/cluster/{rule}.{wildcards}.log"
+    err : "logs/cluster/{rule}.{wildcards}.err"
+
+demultiplex:
+    time : 180
+    mem : 6000
+
+alignement:
+    time: 200
+    mem: 3000
+
+samtobam:
+    time: 280
+    mem: 4000
+removeDUP:    
+    mem: 5000
+
+index_bam:
+    time: 100
+cutadapt:
+    time: 180
+species_separate:
+    time: 300
